@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOT World — MOT Testing & Vehicle Services</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-content">
+    <img class="hero-logo-img" src="logo.png" alt="MOT World">
+    <div class="hero-info">
+      <div class="info-item">
+        <span class="info-label">Location</span>
+        <span class="info-value" id="nav-location">Bordon, Hampshire</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Hours</span>
+        <span class="info-value" id="nav-hours">Mon–Fri 8:00–17:00</span>
+      </div>
+    </div>
+    <p id="hero-subtitle">Fast, fair, and reliable MOT testing with over 25 years of expertise. Book your appointment today.</p>
+  </div>
+</section>
+
+<section class="offers">
+  <h2 class="section-title">This Month's Offers</h2>
+  <div class="offers-grid">
+    <div class="offer-card">
+      <div class="offer-label">MOT AND SERVICE</div>
+      <div class="offer-title" id="second-offer-title">MOT and Service from £189</div>
+      <div class="offer-detail" id="second-offer-detail">Complete MOT and full service in one visit</div>
+      <div class="offer-detail" style="margin-top:-14px;">Phone for quote — just need your engine size</div>
+      <a class="btn-secondary" href="tel:01420384293" id="phone-link-1">☎ 01420 384293</a>
+    </div>
+    <div class="offer-card primary">
+      <div class="offer-label">MOT PRICE OFFER</div>
+      <div class="offer-price" id="offer-price">£29.95</div>
+      <div class="offer-rrp">RRP <span id="offer-rrp">£54.85</span></div>
+      <div class="offer-detail" id="offer-detail">Covers Class 4 MOTs. Bring registration document to qualify for this offer.</div>
+      <a class="btn-secondary" href="booking.html">Book now →</a>
+    </div>
+    <div class="offer-card">
+      <div class="offer-label">HEALTH CHECK</div>
+      <div class="offer-title">Free Vehicle Health Check</div>
+      <div class="offer-detail" id="health-check-detail">Comprehensive check and report</div>
+      <div class="offer-detail" style="margin-top:-14px;">Phone for Appointment</div>
+      <a class="btn-secondary" href="tel:01420384293" id="phone-link-2">☎ 01420 384293</a>
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="stats-content">
+    <h2 class="stats-title">Why Choose MOT World</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Trading since</div>
+        <div class="stat-value" id="trading-since">1996</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Family run</div>
+        <div class="stat-value" id="family-run">LMC of Farnham Ltd</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Service</div>
+        <div class="stat-value">Expert care</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Reputation</div>
+        <div class="stat-value">Trusted</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="reviews">
+  <h2 class="reviews-title">What Customers Say</h2>
+  <div class="reviews-grid">
+    <div class="review-card">
+      <div class="review-text">Quick, easy MOT booking and a fair price. Would use again.</div>
+      <div class="review-source">— Google review</div>
+    </div>
+    <div class="review-card">
+      <div class="review-text">Professional staff who really know their stuff. Highly recommended.</div>
+      <div class="review-source">— Google review</div>
+    </div>
+    <div class="review-card">
+      <div class="review-text">Great service and competitive pricing. Will definitely be back.</div>
+      <div class="review-source">— Google review</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-content">
+    <div class="footer-text">© 2026 MOT World. All rights reserved.</div>
+    <div class="footer-contact"><span id="footer-location">Bordon, Hampshire</span> • <span id="footer-phone">01420 384293</span></div>
+    <div class="footer-links"><a href="admin.html">Admin</a></div>
+  </div>
+</footer>
+
+<script src="data.js"></script>
+<script>
+  (async function () {
+    const c = await loadContent();
+    document.getElementById("nav-location").textContent = c.location;
+    document.getElementById("nav-hours").textContent = c.hours;
+    document.getElementById("hero-subtitle").textContent = c.heroSubtitle;
+    document.getElementById("offer-price").textContent = c.primaryOfferPrice;
+    document.getElementById("offer-rrp").textContent = c.primaryOfferRrp;
+    document.getElementById("offer-detail").textContent = c.primaryOfferDetail;
+    document.getElementById("second-offer-title").textContent = c.secondOfferTitle;
+    document.getElementById("second-offer-detail").textContent = c.secondOfferDetail;
+    document.getElementById("health-check-detail").textContent = c.healthCheckDetail;
+    document.getElementById("trading-since").textContent = c.tradingSince;
+    document.getElementById("family-run").textContent = c.familyRun;
+    document.getElementById("footer-location").textContent = c.location;
+    document.getElementById("footer-phone").textContent = c.phone;
+    const tel = "tel:" + c.phone.replace(/\s+/g, "");
+    document.getElementById("phone-link-1").href = tel;
+    document.getElementById("phone-link-1").textContent = "☎ " + c.phone;
+    document.getElementById("phone-link-2").href = tel;
+    document.getElementById("phone-link-2").textContent = "☎ " + c.phone;
+  })();
+</script>
+</body>
+</html>

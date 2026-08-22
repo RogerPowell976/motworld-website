@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — MOT World</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-content">
+    <a class="logo-link" href="index.html">
+      <div class="logo-block">
+        <img src="logo.png" alt="MOT World" style="height:48px;width:auto;">
+      </div>
+    </a>
+    <div class="nav-right">
+      <a class="nav-cta" href="index.html" style="background:#fff;color:var(--text-dark);border:1px solid var(--border);">View live site</a>
+    </div>
+  </div>
+</header>
+
+<!-- Lock screen -->
+<div class="lock-wrap" id="lock-wrap">
+  <div class="form-card">
+    <h1>Admin access</h1>
+    <p>Enter the staff PIN to edit pricing and offers.</p>
+    <form id="lock-form">
+      <div class="form-row">
+        <label for="pin">PIN</label>
+        <input type="text" id="pin" inputmode="numeric" autocomplete="off">
+      </div>
+      <button type="submit" class="btn-submit">Unlock</button>
+      <div class="lock-error" id="lock-error">Incorrect PIN — try again.</div>
+    </form>
+  </div>
+</div>
+
+<!-- Admin panel -->
+<div class="admin-wrap" id="admin-wrap" style="display:none;">
+  <div class="admin-header">
+    <h1>Upcoming bookings</h1>
+  </div>
+  <p class="admin-sub">Also backed up in your Netlify dashboard under "Forms" in case this list doesn't load.</p>
+
+  <div class="admin-section">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <span id="bookings-status" class="hint">Loading…</span>
+      <button type="button" class="btn-secondary" id="refresh-bookings">Refresh</button>
+    </div>
+    <div id="bookings-list"></div>
+  </div>
+
+  <div class="admin-header" style="margin-top:32px;">
+    <h1>Edit pricing &amp; offers</h1>
+  </div>
+  <p class="admin-sub">Changes go live on the home and booking pages as soon as you save.</p>
+
+  <form id="admin-form">
+    <div class="admin-section">
+      <h2>This month's MOT offer</h2>
+      <div class="admin-row">
+        <div>
+          <label>MOT price</label>
+          <input type="text" id="primaryOfferPrice">
+        </div>
+      </div>
+      <div class="admin-row">
+        <div>
+          <label>RRP (shown as struck-through comparison)</label>
+          <input type="text" id="primaryOfferRrp">
+        </div>
+      </div>
+      <div class="admin-row single">
+        <div>
+          <label>Offer conditions</label>
+          <textarea id="primaryOfferDetail"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h2>MOT and service bundle</h2>
+      <div class="admin-row single">
+        <div>
+          <label>Title (include the price here, e.g. "MOT and Service from £189")</label>
+          <input type="text" id="secondOfferTitle">
+        </div>
+      </div>
+      <div class="admin-row single">
+        <div>
+          <label>Description</label>
+          <textarea id="secondOfferDetail"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Free health check</h2>
+      <div class="admin-row single">
+        <div>
+          <label>Description</label>
+          <textarea id="healthCheckDetail"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Business details</h2>
+      <div class="admin-row">
+        <div>
+          <label>Location</label>
+          <input type="text" id="location">
+        </div>
+        <div>
+          <label>Hours</label>
+          <input type="text" id="hours">
+        </div>
+      </div>
+      <div class="admin-row">
+        <div>
+          <label>Phone number</label>
+          <input type="text" id="phone">
+        </div>
+        <div>
+          <label>Trading since</label>
+          <input type="text" id="tradingSince">
+        </div>
+      </div>
+      <div class="admin-row single">
+        <div>
+          <label>Company name</label>
+          <input type="text" id="familyRun">
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Homepage headline</h2>
+      <div class="admin-row single">
+        <div>
+          <label>Hero title</label>
+          <input type="text" id="heroTitle">
+        </div>
+      </div>
+      <div class="admin-row single">
+        <div>
+          <label>Hero subtitle</label>
+          <textarea id="heroSubtitle"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="save-bar">
+      <span class="save-status" id="save-status"></span>
+      <button type="submit" class="btn-save">Save changes</button>
+    </div>
+  </form>
+</div>
+
+<script src="data.js"></script>
+<script>
+  // NOTE: this is a simple front-end PIN gate for staff convenience, not real
+  // security — anyone with the PIN (or basic dev tools) can edit content.
+  const ADMIN_PIN = "1996";
+  const FIELDS = [
+    "primaryOfferPrice", "primaryOfferRrp", "primaryOfferDetail",
+    "secondOfferTitle", "secondOfferDetail", "healthCheckDetail",
+    "location", "hours", "phone", "tradingSince", "familyRun",
+    "heroTitle", "heroSubtitle"
+  ];
+  let content = null;
+
+  document.getElementById("lock-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const entered = document.getElementById("pin").value.trim();
+    if (entered === ADMIN_PIN) {
+      document.getElementById("lock-wrap").style.display = "none";
+      document.getElementById("admin-wrap").style.display = "block";
+      content = await loadContent();
+      FIELDS.forEach(id => { document.getElementById(id).value = content[id]; });
+      loadBookings();
+    } else {
+      document.getElementById("lock-error").classList.add("show");
+    }
+  });
+
+  async function loadBookings() {
+    const status = document.getElementById("bookings-status");
+    const list = document.getElementById("bookings-list");
+    status.textContent = "Loading…";
+    try {
+      const res = await fetch(`/.netlify/functions/list-bookings?pin=${encodeURIComponent(ADMIN_PIN)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        status.textContent = (data && data.error) || "Couldn't load bookings — check the Forms dashboard instead.";
+        return;
+      }
+      if (!data.bookings || data.bookings.length === 0) {
+        status.textContent = "No upcoming bookings yet.";
+        list.innerHTML = "";
+        return;
+      }
+      status.textContent = `${data.bookings.length} upcoming booking${data.bookings.length === 1 ? "" : "s"}`;
+      list.innerHTML = data.bookings.map(b => `
+        <div style="border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; background:#fff;">
+          <strong>${b.date} at ${b.time}</strong><br>
+          ${b.reg}${b.makeModel ? " — " + b.makeModel : ""} · ${b.name} · ${b.phone}${b.email ? " · " + b.email : ""}
+          ${b.notes ? `<br><span style="color:var(--text-muted);">Note: ${b.notes}</span>` : ""}
+        </div>
+      `).join("");
+    } catch (err) {
+      status.textContent = "Couldn't load bookings — check the Forms dashboard instead.";
+    }
+  }
+  document.getElementById("refresh-bookings").addEventListener("click", loadBookings);
+
+  document.getElementById("admin-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    FIELDS.forEach(id => { content[id] = document.getElementById(id).value; });
+    const status = document.getElementById("save-status");
+    status.textContent = "Saving…";
+    status.className = "save-status";
+    try {
+      await saveContent(content);
+      status.textContent = "Saved — refresh the home/booking page in this browser to see it.";
+      status.className = "save-status ok";
+    } catch (err) {
+      status.textContent = "Couldn't save — please try again.";
+      status.className = "save-status";
+    }
+  });
+</script>
+</body>
+</html>
