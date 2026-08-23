@@ -1,43 +1,297 @@
-const { getStore } = require('@netlify/blobs');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book Your MOT — MOT World</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-function bookingsStore() {
-  if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
-    return getStore({ name: 'bookings', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
+<header>
+  <div class="header-content">
+    <a class="logo-link" href="index.html">
+      <div class="logo-block">
+        <img src="logo.png" alt="MOT World" style="height:48px;width:auto;">
+      </div>
+    </a>
+    <div class="nav-right">
+      <a class="nav-cta" href="index.html" style="background:#fff;color:var(--text-dark);border:1px solid var(--border);">Home</a>
+    </div>
+  </div>
+</header>
+
+<section class="hero compact">
+  <div class="hero-content">
+    <h1 style="color:var(--text-dark);">Book Your MOT</h1>
+    <p>Click below to book an MOT.</p>
+  </div>
+</section>
+
+<div class="booking-wrap">
+  <div class="form-card">
+
+    <!-- Hidden static form so Netlify detects and captures submissions -->
+    <form name="mot-booking" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input type="text" name="service" />
+      <input type="text" name="reg" />
+      <input type="text" name="makeModel" />
+      <input type="text" name="date" />
+      <input type="text" name="time" />
+      <input type="text" name="name" />
+      <input type="text" name="phone" />
+      <input type="email" name="email" />
+      <textarea name="notes"></textarea>
+      <input name="bot-field" />
+    </form>
+
+    <form id="booking-form">
+      <div class="form-row">
+        <label for="date">Choose a date</label>
+        <input type="date" id="date" required class="date-highlight">
+        <div class="hint">Just choose a date — open Monday to Friday, 8:00am–5:00pm.</div>
+      </div>
+
+      <div class="form-row form-grid">
+        <div>
+          <label for="reg">Vehicle registration</label>
+          <input type="text" id="reg" placeholder="e.g. AB12 CDE" required style="text-transform:uppercase;">
+          <div class="hint" id="lookup-status"></div>
+        </div>
+        <div>
+          <label for="makeModel">Make &amp; model</label>
+          <input type="text" id="makeModel" placeholder="e.g. Ford Fiesta">
+        </div>
+      </div>
+
+      <div class="form-row" id="slots-row" style="display:none;">
+        <label>Choose a time</label>
+        <div id="slots-status" class="hint" style="margin-bottom:8px;"></div>
+        <div class="slot-grid" id="slot-grid"></div>
+      </div>
+
+      <div class="form-row form-grid">
+        <div>
+          <label for="name">Your name</label>
+          <input type="text" id="name" required>
+        </div>
+        <div>
+          <label for="phone">Mobile phone number</label>
+          <input type="tel" id="phone" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label for="email">Email</label>
+        <input type="email" id="email" required>
+      </div>
+
+      <div class="form-row">
+        <label for="notes">Anything we should know? <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+        <textarea id="notes" placeholder="e.g. known fault, dashboard warning light..."></textarea>
+      </div>
+
+      <div id="form-error" class="hint" style="color:var(--red); display:none; margin-bottom:12px;"></div>
+
+      <button type="submit" class="btn-submit" id="submit-btn" style="display:none;"></button>
+      <div class="form-alt">We will email to confirm booking once date and time selected.</div>
+    </form>
+
+    <div class="confirm-panel" id="confirm-panel">
+      <div class="confirm-icon">✓</div>
+      <h2>Request received</h2>
+      <p>Thanks — we'll be in touch shortly to confirm your appointment.</p>
+      <div class="confirm-detail" id="confirm-detail"></div>
+      <a class="btn-secondary" href="index.html">Back to home</a>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <div class="footer-content">
+    <div class="footer-contact"><span id="footer-location">Bordon, Hampshire</span> • <span id="footer-phone">01420 384293</span></div>
+    <div class="footer-links"><a href="admin.html">Admin</a></div>
+  </div>
+</footer>
+
+<script src="data.js"></script>
+<script>
+  let content = null;
+  let lookupTimer = null;
+  let selectedTime = null;
+
+  function renderSlots() {
+    const date = document.getElementById("date").value;
+    selectedTime = null;
+    updateSubmitState();
+    const row = document.getElementById("slots-row");
+    const status = document.getElementById("slots-status");
+    const grid = document.getElementById("slot-grid");
+
+    if (!date) { row.style.display = "none"; return; }
+    row.style.display = "block";
+    status.textContent = "Loading available times…";
+    grid.innerHTML = "";
+
+    fetch(`/.netlify/functions/get-slots?date=${date}`)
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          status.textContent = "Couldn't load times — please try again shortly, or call us.";
+          return;
+        }
+        if (data.closed) {
+          status.textContent = "We're closed that day — please pick a weekday (Mon–Fri).";
+          return;
+        }
+        if (!data.slots || data.slots.length === 0) {
+          status.textContent = "No times found for that day.";
+          return;
+        }
+        const anyAvailable = data.slots.some(s => s.available);
+        status.textContent = anyAvailable ? "Tap a time to select it:" : "Fully booked that day — please try another date.";
+
+        grid.innerHTML = data.slots.map(s =>
+          `<button type="button" class="slot-btn" data-time="${s.time}" ${s.available ? "" : "disabled"}>${s.time}</button>`
+        ).join("");
+
+        grid.querySelectorAll(".slot-btn:not(:disabled)").forEach(btn => {
+          btn.addEventListener("click", () => {
+            grid.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
+            btn.classList.add("selected");
+            selectedTime = btn.dataset.time;
+            updateSubmitState();
+          });
+        });
+      })
+      .catch(() => {
+        status.textContent = "Couldn't load times — please try again shortly, or call us.";
+      });
   }
-  return getStore('bookings');
-}
 
-const ADMIN_PIN = '1996';
-
-exports.handler = async (event) => {
-  const pin = event.queryStringParameters && event.queryStringParameters.pin;
-  if (pin !== ADMIN_PIN) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
-
-  try {
-    const store = bookingsStore();
-    const { blobs } = await store.list();
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    const results = [];
-    for (const b of blobs) {
-      if (b.key < todayStr) continue;
-      const dayData = await store.get(b.key, { type: 'json' });
-      if (!dayData) continue;
-      for (const [time, booking] of Object.entries(dayData)) {
-        results.push({ date: b.key, time, ...booking });
-      }
+  function updateSubmitState() {
+    const submitBtn = document.getElementById("submit-btn");
+    if (selectedTime) {
+      submitBtn.style.display = "block";
+      submitBtn.disabled = false;
+      submitBtn.textContent = `Request booking for ${selectedTime} →`;
+    } else {
+      submitBtn.style.display = "none";
+      submitBtn.disabled = true;
     }
-    results.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookings: results }),
-    };
-  } catch (e) {
-    console.error('list-bookings: Blobs failed:', e.message);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Storage unavailable', detail: e.message }) };
   }
-};
+
+  (async function () {
+    content = await loadContent();
+    document.getElementById("footer-location").textContent = content.location;
+    document.getElementById("footer-phone").textContent = content.phone;
+
+    const dateInput = document.getElementById("date");
+    const d = new Date();
+    dateInput.min = d.toISOString().split("T")[0];
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 45);
+    dateInput.max = maxDate.toISOString().split("T")[0];
+  })();
+
+  document.getElementById("date").addEventListener("change", renderSlots);
+
+  // Auto-fill make (not model -- DVLA doesn't hold that) once a full-looking
+  // reg is typed. Fails silently to manual entry if the lookup isn't set up
+  // yet or the plate isn't found.
+  document.getElementById("reg").addEventListener("input", function () {
+    clearTimeout(lookupTimer);
+    const reg = this.value.trim();
+    const status = document.getElementById("lookup-status");
+    if (reg.length < 6) { status.textContent = ""; return; }
+
+    lookupTimer = setTimeout(async () => {
+      status.textContent = "Looking up vehicle…";
+      try {
+        const res = await fetch("/.netlify/functions/lookup-vehicle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ registrationNumber: reg }),
+        });
+        const data = await res.json();
+        if (data.found && data.make) {
+          const makeModelField = document.getElementById("makeModel");
+          if (!makeModelField.value) makeModelField.value = data.make;
+          status.textContent = `Found: ${data.make}${data.colour ? ", " + data.colour : ""}`;
+        } else {
+          status.textContent = "";
+        }
+      } catch (e) {
+        status.textContent = "";
+      }
+    }, 500);
+  });
+
+  document.getElementById("booking-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    if (!selectedTime) return;
+
+    const reg = document.getElementById("reg").value.toUpperCase();
+    const makeModel = document.getElementById("makeModel").value;
+    const date = document.getElementById("date").value;
+    const name = document.getElementById("name").value;
+    const phone = document.getElementById("phone").value;
+    const email = document.getElementById("email").value;
+    const notes = document.getElementById("notes").value;
+    const serviceLabel = "MOT test";
+    const submitBtn = document.getElementById("submit-btn");
+    const errorBox = document.getElementById("form-error");
+    errorBox.style.display = "none";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Booking…";
+
+    try {
+      const res = await fetch("/.netlify/functions/book-slot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, time: selectedTime, name, phone, email, reg, makeModel, notes }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        errorBox.textContent = result.error || "Something went wrong — please try again.";
+        errorBox.style.display = "block";
+        updateSubmitState();
+        renderSlots(); // refresh in case that slot was just taken
+        return;
+      }
+    } catch (err) {
+      errorBox.textContent = "Couldn't reach the booking system — please try again or call us.";
+      errorBox.style.display = "block";
+      updateSubmitState();
+      return;
+    }
+
+    // Also log to Netlify Forms as a simple backup staff can see in their dashboard.
+    try {
+      await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          "form-name": "mot-booking",
+          service: serviceLabel, reg, makeModel, date, time: selectedTime, name, phone, email, notes,
+        }).toString(),
+      });
+    } catch (err) {
+      // Non-critical -- the real booking already succeeded above.
+    }
+
+    document.getElementById("confirm-detail").innerHTML =
+      `<strong>Service:</strong> ${serviceLabel}<br>` +
+      `<strong>Vehicle:</strong> ${reg}${makeModel ? " — " + makeModel : ""}<br>` +
+      `<strong>Requested:</strong> ${date} · ${selectedTime}<br>` +
+      `<strong>Name:</strong> ${name}<br>` +
+      `<strong>Email:</strong> ${email}`;
+
+    document.getElementById("booking-form").style.display = "none";
+    document.getElementById("confirm-panel").classList.add("show");
+  });
+</script>
+</body>
+</html>
