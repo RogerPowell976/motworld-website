@@ -1,5 +1,12 @@
 const { getStore } = require('@netlify/blobs');
 
+function bookingsStore() {
+  if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
+    return getStore({ name: 'bookings', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
+  }
+  return getStore('bookings');
+}
+
 const ADMIN_PIN = '1996';
 
 exports.handler = async (event) => {
@@ -9,7 +16,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const store = getStore('bookings');
+    const store = bookingsStore();
     const { blobs } = await store.list();
     const todayStr = new Date().toISOString().split('T')[0];
 
