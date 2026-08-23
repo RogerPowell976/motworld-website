@@ -1,5 +1,12 @@
 const { getStore } = require('@netlify/blobs');
 
+function bookingsStore() {
+  if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
+    return getStore({ name: 'bookings', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
+  }
+  return getStore('bookings');
+}
+
 const WORK_START_MIN = 8 * 60;
 const WORK_END_MIN = 17 * 60;
 const SLOT_MINUTES = 45;
@@ -85,7 +92,7 @@ exports.handler = async (event) => {
 
   let store, booked;
   try {
-    store = getStore('bookings');
+    store = bookingsStore();
     booked = (await store.get(date, { type: 'json' })) || {};
   } catch (e) {
     console.error('book-slot: Blobs read failed:', e.message);
