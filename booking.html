@@ -46,6 +46,12 @@
     </form>
 
     <form id="booking-form">
+      <div class="form-row">
+        <label for="date">Choose a date</label>
+        <input type="date" id="date" required class="date-highlight">
+        <div class="hint">Just choose a date — open Monday to Friday, 8:00am–5:00pm.</div>
+      </div>
+
       <div class="form-row form-grid">
         <div>
           <label for="reg">Vehicle registration</label>
@@ -56,12 +62,6 @@
           <label for="makeModel">Make &amp; model</label>
           <input type="text" id="makeModel" placeholder="e.g. Ford Fiesta">
         </div>
-      </div>
-
-      <div class="form-row">
-        <label for="date">Choose a date</label>
-        <input type="date" id="date" required>
-        <div class="hint">Open Monday to Friday, 8:00am–5:00pm.</div>
       </div>
 
       <div class="form-row" id="slots-row" style="display:none;">
@@ -93,7 +93,7 @@
 
       <div id="form-error" class="hint" style="color:var(--red); display:none; margin-bottom:12px;"></div>
 
-      <button type="submit" class="btn-submit" id="submit-btn" disabled>Select a time slot first</button>
+      <button type="submit" class="btn-submit" id="submit-btn" style="display:none;"></button>
       <div class="form-alt">We'll call or email to confirm — this doesn't lock in the slot yet.</div>
     </form>
 
@@ -173,11 +173,12 @@
   function updateSubmitState() {
     const submitBtn = document.getElementById("submit-btn");
     if (selectedTime) {
+      submitBtn.style.display = "block";
       submitBtn.disabled = false;
       submitBtn.textContent = `Request booking for ${selectedTime} →`;
     } else {
+      submitBtn.style.display = "none";
       submitBtn.disabled = true;
-      submitBtn.textContent = "Select a time slot first";
     }
   }
 

@@ -239,6 +239,11 @@ input[type="text"], input[type="tel"], input[type="email"], input[type="date"], 
   color: var(--text-dark);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--red); outline-offset: 1px; }
+.date-highlight {
+  background: #fdecea;
+  border: 2px solid var(--red);
+  font-weight: 700;
+}
 textarea { resize: vertical; min-height: 80px; }
 .service-options { display: grid; gap: 10px; }
 .service-option {
