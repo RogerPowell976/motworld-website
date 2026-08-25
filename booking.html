@@ -1,301 +1,158 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Book Your MOT — MOT World</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<header>
-<div class="header-content">
-<a class="logo-link" href="index.html">
-<div class="logo-block">
-<img src="logo.png" alt="MOT World" style="height:48px;width:auto;">
-</div>
-</a>
-<div class="nav-right">
-<a class="nav-cta" href="index.html" style="background:#fff;color:var(--text-dark);border:1px solid var(--border);">Home</a>
-</div>
-</div>
-</header>
+const { getStore } = require('@netlify/blobs');
 
-<section class="hero compact">
-<div class="hero-content">
-<h1 style="color:var(--text-dark);">Book Your MOT</h1>
-<p>Click below to book an MOT.</p>
-</div>
-</section>
-
-<div class="booking-wrap">
-<div class="form-card">
-
-<!-- Hidden static form so Netlify detects and captures submissions -->
-<form name="mot-booking" data-netlify="true" netlify-honeypot="bot-field" hidden>
-<input type="text" name="service" />
-<input type="text" name="reg" />
-<input type="text" name="makeModel" />
-<input type="text" name="date" />
-<input type="text" name="time" />
-<input type="text" name="name" />
-<input type="text" name="phone" />
-<input type="email" name="email" />
-<textarea name="notes"></textarea>
-<input name="bot-field" />
-</form>
-
-<form id="booking-form">
-<div class="form-row">
-<label for="date">Choose a date</label>
-<input type="date" id="date" required class="date-highlight">
-<div class="hint">Just choose a date — open Monday to Friday, 8:00am–5:00pm.</div>
-</div>
-
-<div class="form-row form-grid">
-<div>
-<label for="reg">Vehicle registration</label>
-<input type="text" id="reg" placeholder="e.g. AB12 CDE" required style="text-transform:uppercase;">
-<div class="hint" id="lookup-status"></div>
-</div>
-<div>
-<label for="makeModel">Make &amp; model</label>
-<input type="text" id="makeModel" placeholder="e.g. Ford Fiesta">
-</div>
-</div>
-
-<div class="form-row" id="slots-row" style="display:none;">
-<label>Choose a time</label>
-<div id="slots-status" class="hint" style="margin-bottom:8px;"></div>
-<div class="slot-grid" id="slot-grid"></div>
-</div>
-
-<div class="form-row form-grid">
-<div>
-<label for="name">Your name</label>
-<input type="text" id="name" required>
-</div>
-<div>
-<label for="phone">Mobile phone number</label>
-<input type="tel" id="phone" required>
-</div>
-</div>
-
-<div class="form-row">
-<label for="email">Email</label>
-<input type="email" id="email" required>
-</div>
-
-<div class="form-row">
-<label for="notes">Anything we should know? <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-<textarea id="notes" placeholder="e.g. known fault, dashboard warning light..."></textarea>
-</div>
-
-<div id="form-error" class="hint" style="color:var(--red); display:none; margin-bottom:12px;"></div>
-
-<button type="submit" class="btn-submit" id="submit-btn" style="display:none;"></button>
-<div class="form-alt">We will email to confirm booking once date and time selected.</div>
-</form>
-
-<div class="confirm-panel" id="confirm-panel">
-<div class="confirm-icon">✓</div>
-<h2>Request received</h2>
-<p>Thanks — we'll be in touch shortly to confirm your appointment.</p>
-<div class="confirm-detail" id="confirm-detail"></div>
-<a class="btn-secondary" href="index.html">Back to home</a>
-</div>
-
-</div>
-</div>
-
-<footer>
-<div class="footer-content">
-<div class="footer-contact"><span id="footer-location">Bordon, Hampshire</span> • <span id="footer-phone">01420 384293</span></div>
-<div class="footer-links"><a href="admin.html">Admin</a></div>
-</div>
-</footer>
-
-<script src="data.js"></script>
-<script>
-let content = null;
-let lookupTimer = null;
-let selectedTime = null;
-
-function renderSlots() {
-const date = document.getElementById("date").value;
-selectedTime = null;
-updateSubmitState();
-const row = document.getElementById("slots-row");
-const status = document.getElementById("slots-status");
-const grid = document.getElementById("slot-grid");
-if (!date) { row.style.display = "none"; return; }
-row.style.display = "block";
-status.textContent = "Loading available times…";
-grid.innerHTML = "";
-
-fetch(`/.netlify/functions/get-slots?date=${date}`)
-.then(res => res.json().then(data => ({ ok: res.ok, data })))
-.then(({ ok, data }) => {
-if (!ok) {
-status.textContent = "Couldn't load times — please try again shortly, or call us.";
-return;
-}
-if (data.closed) {
-status.textContent = "We're closed that day — please pick a weekday (Mon–Fri).";
-return;
-}
-if (!data.slots || data.slots.length === 0) {
-status.textContent = "No times found for that day.";
-return;
-}
-const anyAvailable = data.slots.some(s => s.available);
-status.textContent = anyAvailable ? "Tap a time to select it:" : "Fully booked that day — please try another date.";
-grid.innerHTML = data.slots.map(s =>
-`<button type="button" class="slot-btn" data-time="${s.time}" ${s.available ? "" : "disabled"}>${s.time}</button>`
-).join("");
-grid.querySelectorAll(".slot-btn:not(:disabled)").forEach(btn => {
-btn.addEventListener("click", () => {
-grid.querySelectorAll(".slot-btn").forEach(b => b.classList.remove("selected"));
-btn.classList.add("selected");
-selectedTime = btn.dataset.time;
-updateSubmitState();
-});
-});
-})
-.catch(() => {
-status.textContent = "Couldn't load times — please try again shortly, or call us.";
-});
+function bookingsStore() {
+  if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
+    return getStore({ name: 'bookings', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
+  }
+  return getStore('bookings');
 }
 
-function updateSubmitState() {
-const submitBtn = document.getElementById("submit-btn");
-if (selectedTime) {
-submitBtn.style.display = "block";
-submitBtn.disabled = false;
-submitBtn.textContent = `Request booking for ${selectedTime} →`;
-} else {
-submitBtn.style.display = "none";
-submitBtn.disabled = true;
-}
+const WORK_START_MIN = 8 * 60;
+const WORK_END_MIN = 17 * 60;
+const SLOT_MINUTES = 45;
+
+function isWeekday(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  return day >= 1 && day <= 5;
 }
 
-(async function () {
-content = await loadContent();
-document.getElementById("footer-location").textContent = content.location;
-document.getElementById("footer-phone").textContent = content.phone;
-
-const dateInput = document.getElementById("date");
-const d = new Date();
-dateInput.min = d.toISOString().split("T")[0];
-const maxDate = new Date();
-maxDate.setDate(maxDate.getDate() + 45);
-dateInput.max = maxDate.toISOString().split("T")[0];
-})();
-
-document.getElementById("date").addEventListener("change", renderSlots);
-
-// Let customers click anywhere on the date box (not just the small calendar
-// icon) to open the date picker. Falls back to normal behaviour on browsers
-// that don't support showPicker().
-document.getElementById("date").addEventListener("click", function () {
-if (this.showPicker) {
-try { this.showPicker(); } catch (e) {}
-}
-});
-
-// Auto-fill make (not model -- DVLA doesn't hold that) once a full-looking
-// reg is typed. Fails silently to manual entry if the lookup isn't set up
-// yet or the plate isn't found.
-document.getElementById("reg").addEventListener("input", function () {
-clearTimeout(lookupTimer);
-const reg = this.value.trim();
-const status = document.getElementById("lookup-status");
-if (reg.length < 6) { status.textContent = ""; return; }
-lookupTimer = setTimeout(async () => {
-status.textContent = "Looking up vehicle…";
-try {
-const res = await fetch("/.netlify/functions/lookup-vehicle", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ registrationNumber: reg }),
-});
-const data = await res.json();
-if (data.found && data.make) {
-const makeModelField = document.getElementById("makeModel");
-if (!makeModelField.value) makeModelField.value = data.make;
-status.textContent = `Found: ${data.make}${data.colour ? ", " + data.colour : ""}`;
-} else {
-status.textContent = "";
-}
-} catch (e) {
-status.textContent = "";
-}
-}, 500);
-});
-
-document.getElementById("booking-form").addEventListener("submit", async function (e) {
-e.preventDefault();
-if (!selectedTime) return;
-
-const reg = document.getElementById("reg").value.toUpperCase();
-const makeModel = document.getElementById("makeModel").value;
-const date = document.getElementById("date").value;
-const name = document.getElementById("name").value;
-const phone = document.getElementById("phone").value;
-const email = document.getElementById("email").value;
-const notes = document.getElementById("notes").value;
-const serviceLabel = "MOT test";
-
-const submitBtn = document.getElementById("submit-btn");
-const errorBox = document.getElementById("form-error");
-errorBox.style.display = "none";
-submitBtn.disabled = true;
-submitBtn.textContent = "Booking…";
-
-try {
-const res = await fetch("/.netlify/functions/book-slot", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ date, time: selectedTime, name, phone, email, reg, makeModel, notes }),
-});
-const result = await res.json();
-if (!res.ok) {
-errorBox.textContent = result.error || "Something went wrong — please try again.";
-errorBox.style.display = "block";
-updateSubmitState();
-renderSlots(); // refresh in case that slot was just taken
-return;
-}
-} catch (err) {
-errorBox.textContent = "Couldn't reach the booking system — please try again or call us.";
-errorBox.style.display = "block";
-updateSubmitState();
-return;
+function isValidSlotTime(time) {
+  if (!/^\d{2}:\d{2}$/.test(time)) return false;
+  const [h, m] = time.split(':').map(Number);
+  const mins = h * 60 + m;
+  if (mins < WORK_START_MIN || mins + SLOT_MINUTES > WORK_END_MIN) return false;
+  return (mins - WORK_START_MIN) % SLOT_MINUTES === 0;
 }
 
-// Also log to Netlify Forms as a simple backup staff can see in their dashboard.
-try {
-await fetch("/", {
-method: "POST",
-headers: { "Content-Type": "application/x-www-form-urlencoded" },
-body: new URLSearchParams({
-"form-name": "mot-booking",
-service: serviceLabel, reg, makeModel, date, time: selectedTime, name, phone, email, notes,
-}).toString(),
-});
-} catch (err) {
-// Non-critical -- the real booking already succeeded above.
+// Formats a YYYY-MM-DD date string as e.g. "Wednesday 2nd of September".
+function formatDateEnglish(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const day = d.getDate();
+  const suffix = (day % 10 === 1 && day !== 11) ? 'st'
+    : (day % 10 === 2 && day !== 12) ? 'nd'
+    : (day % 10 === 3 && day !== 13) ? 'rd'
+    : 'th';
+  return `${days[d.getDay()]} ${day}${suffix} of ${months[d.getMonth()]}`;
 }
 
-document.getElementById("confirm-detail").innerHTML =
-`<strong>Service:</strong> ${serviceLabel}<br>` +
-`<strong>Vehicle:</strong> ${reg}${makeModel ? " — " + makeModel : ""}<br>` +
-`<strong>Requested:</strong> ${date} · ${selectedTime}<br>` +
-`<strong>Name:</strong> ${name}<br>` +
-`<strong>Email:</strong> ${email}`;
+// Sends the customer a confirmation email via Resend. Fails silently (logs
+// only) if RESEND_API_KEY isn't set yet, or if Resend rejects the send --
+// a booking should still succeed even if the email couldn't go out.
+async function sendConfirmationEmail(booking) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.RESEND_FROM || 'MOT World <bookings@motworld.co.uk>';
+  if (!apiKey || !booking.email) return;
 
-document.getElementById("booking-form").style.display = "none";
-document.getElementById("confirm-panel").classList.add("show");
-});
-</script>
-</body>
-</html>
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: booking.email,
+        subject: 'Your MOT booking request — MOT World',
+        html: `
+          <div style="font-family: Arial, Helvetica, sans-serif; max-width:480px; margin:0 auto; color:#1a1a1a;">
+            <div style="text-align:center; padding:0 0 20px 0;">
+              <img src="https://motworld.co.uk/logo.png" alt="MOT World" style="height:48px;">
+            </div>
+            <p>Hi ${booking.name || 'there'},</p>
+            <p>Thanks for your booking request with MOT World. Here's what you sent us:</p>
+            <ul>
+              <li><strong>Date:</strong> ${formatDateEnglish(booking.date)}</li>
+              <li><strong>Time:</strong> ${booking.time}</li>
+              <li><strong>Vehicle:</strong> ${booking.reg}${booking.makeModel ? ' — ' + booking.makeModel : ''}</li>
+            </ul>
+            <p>Please remember to bring your registration document to <strong>qualify</strong> for the special offer price. We will gently remind you 48 hours before your booking.</p>
+            <p>MOT World</p>
+            <hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0;">
+            <p style="font-size:13px;color:#666;text-align:center;">
+              MOT World — Bordon, Hampshire<br>
+              01420 384293 &middot; <a href="https://motworld.co.uk" style="color:#666;">motworld.co.uk</a>
+            </p>
+          </div>
+        `,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('book-slot: Resend send failed:', res.status, text);
+    }
+  } catch (e) {
+    console.error('book-slot: Resend send threw:', e.message);
+  }
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+  }
+
+  let data;
+  try {
+    data = JSON.parse(event.body || '{}');
+  } catch (e) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body' }) };
+  }
+
+  const { date, time, name, phone, reg, makeModel, email, notes } = data;
+
+  if (!date || !time || !name || !phone || !reg) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields' }) };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isWeekday(date)) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid or non-working date' }) };
+  }
+  if (!isValidSlotTime(time)) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid time slot' }) };
+  }
+
+  let store, booked;
+  try {
+    store = bookingsStore();
+    booked = (await store.get(date, { type: 'json' })) || {};
+  } catch (e) {
+    console.error('book-slot: Blobs read failed:', e.message);
+    return { statusCode: 500, body: JSON.stringify({ error: 'Storage unavailable', detail: e.message }) };
+  }
+
+  if (booked[time]) {
+    return {
+      statusCode: 409,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'That slot has just been booked by someone else. Please choose another.' }),
+    };
+  }
+
+  const bookingRecord = {
+    name: String(name).slice(0, 100),
+    phone: String(phone).slice(0, 30),
+    email: email ? String(email).slice(0, 100) : '',
+    reg: String(reg).toUpperCase().slice(0, 12),
+    makeModel: makeModel ? String(makeModel).slice(0, 100) : '',
+    notes: notes ? String(notes).slice(0, 500) : '',
+    bookedAt: new Date().toISOString(),
+  };
+  booked[time] = bookingRecord;
+
+  try {
+    await store.setJSON(date, booked);
+  } catch (e) {
+    console.error('book-slot: Blobs write failed:', e.message);
+    return { statusCode: 500, body: JSON.stringify({ error: 'Could not save booking', detail: e.message }) };
+  }
+
+  await sendConfirmationEmail({ ...bookingRecord, date, time });
+
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ success: true }),
+  };
+};
