@@ -40,7 +40,7 @@
       <div class="offer-price" id="offer-price">£29.95</div>
       <div class="offer-rrp">RRP <span id="offer-rrp">£54.85</span></div>
       <div class="offer-detail" id="offer-detail">Covers Class 4 MOTs. Bring registration document to qualify for this offer.</div>
-      <a class="btn-secondary" href="booking.html">Book now →</a>
+      <a class="btn-secondary" href="tel:01420384293" id="book-now-link">Book now ☎ 01420 384293</a>
     </div>
     <div class="offer-card">
       <div class="offer-label">HEALTH CHECK</div>
@@ -124,6 +124,8 @@
     document.getElementById("phone-link-1").textContent = "☎ " + c.phone;
     document.getElementById("phone-link-2").href = tel;
     document.getElementById("phone-link-2").textContent = "☎ " + c.phone;
+    document.getElementById("book-now-link").href = tel;
+    document.getElementById("book-now-link").textContent = "Book now ☎ " + c.phone;
   })();
 </script>
 </body>
