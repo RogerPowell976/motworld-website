@@ -161,9 +161,10 @@
 
 <script src="data.js"></script>
 <script>
-  // NOTE: this is a simple front-end PIN gate for staff convenience, not real
-  // security — anyone with the PIN (or basic dev tools) can edit content.
-  const ADMIN_PIN = "1996";
+  // The PIN is now checked entirely on the server (check-pin.js) -- it is
+  // never sent to or stored in this page's code. A successful check returns
+  // a short-lived session token, which is what gets used for admin requests
+  // like loading bookings.
   const FIELDS = [
     "primaryOfferPrice", "primaryOfferRrp", "primaryOfferDetail",
     "secondOfferTitle", "secondOfferDetail", "healthCheckDetail",
@@ -171,18 +172,41 @@
     "heroTitle", "heroSubtitle"
   ];
   let content = null;
+  let sessionToken = null;
 
   document.getElementById("lock-form").addEventListener("submit", async function (e) {
     e.preventDefault();
     const entered = document.getElementById("pin").value.trim();
-    if (entered === ADMIN_PIN) {
+    const errorBox = document.getElementById("lock-error");
+    const unlockBtn = document.querySelector("#lock-form button[type=submit]");
+    errorBox.classList.remove("show");
+    unlockBtn.disabled = true;
+
+    try {
+      const res = await fetch("/.netlify/functions/check-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: entered }),
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        errorBox.textContent = result.error || "Incorrect PIN — try again.";
+        errorBox.classList.add("show");
+        unlockBtn.disabled = false;
+        return;
+      }
+
+      sessionToken = result.token;
       document.getElementById("lock-wrap").style.display = "none";
       document.getElementById("admin-wrap").style.display = "block";
       content = await loadContent();
       FIELDS.forEach(id => { document.getElementById(id).value = content[id]; });
       loadBookings();
-    } else {
-      document.getElementById("lock-error").classList.add("show");
+    } catch (err) {
+      errorBox.textContent = "Couldn't reach the server — please try again.";
+      errorBox.classList.add("show");
+      unlockBtn.disabled = false;
     }
   });
 
@@ -191,7 +215,9 @@
     const list = document.getElementById("bookings-list");
     status.textContent = "Loading…";
     try {
-      const res = await fetch(`/.netlify/functions/list-bookings?pin=${encodeURIComponent(ADMIN_PIN)}`);
+      const res = await fetch("/.netlify/functions/list-bookings", {
+        headers: { "Authorization": `Bearer ${sessionToken}` },
+      });
       const data = await res.json();
       if (!res.ok) {
         status.textContent = (data && data.error) || "Couldn't load bookings — check the Forms dashboard instead.";
@@ -223,8 +249,8 @@
     status.textContent = "Saving…";
     status.className = "save-status";
     try {
-      await saveContent(content);
-      status.textContent = "Saved — refresh the home/booking page in this browser to see it.";
+      await saveContent(content, sessionToken);
+      status.textContent = "Saved — now live for everyone visiting the site.";
       status.className = "save-status ok";
     } catch (err) {
       status.textContent = "Couldn't save — please try again.";
