@@ -1,13 +1,6 @@
-// Shared site content for MOT World. Admin edits are saved to the browser's
-// localStorage under the key "site-content" and read by every page.
-//
-// NOTE ON SCOPE: localStorage is per-browser, per-device. Saving here updates
-// what THIS browser sees on index.html/booking.html/admin.html. It does not
-// push changes to other visitors' phones/computers -- for that, pricing needs
-// to live on a server (a small backend or a hosted database) rather than in
-// the browser. See the note at the bottom of this file if you want that.
-const STORAGE_KEY = "site-content";
-
+// Shared site content for MOT World. Admin edits are saved to a shared
+// server-side store (via get-content.js / save-content.js) so every visitor
+// sees the same pricing and offers, not just the browser that made the edit.
 const DEFAULT_CONTENT = {
   location: "Bordon, Hampshire",
   hours: "Mon–Fri 8:00–17:00",
@@ -26,21 +19,30 @@ const DEFAULT_CONTENT = {
 
 async function loadContent() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      return { ...DEFAULT_CONTENT, ...JSON.parse(raw) };
+    const res = await fetch("/.netlify/functions/get-content");
+    if (res.ok) {
+      const saved = await res.json();
+      return { ...DEFAULT_CONTENT, ...saved };
     }
   } catch (e) {
-    // Private browsing / storage disabled -- fall back to defaults.
+    // Network issue -- fall back to defaults below rather than breaking the page.
   }
   return { ...DEFAULT_CONTENT };
 }
 
-async function saveContent(content) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(content));
+// sessionToken is the admin session token from check-pin.js (see admin.html).
+async function saveContent(content, sessionToken) {
+  const res = await fetch("/.netlify/functions/save-content", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(content),
+  });
+  if (!res.ok) {
+    const result = await res.json().catch(() => ({}));
+    throw new Error(result.error || "Could not save");
+  }
   return true;
 }
-
-// To make admin changes visible to EVERY visitor (not just this browser),
-// swap loadContent/saveContent above for calls to a real backend endpoint
-// that reads/writes a shared database or file on your server.
