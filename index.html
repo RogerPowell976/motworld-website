@@ -6,7 +6,20 @@
 <title>MOT World — MOT Testing & Vehicle Services</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body style="visibility:hidden;">
+
+<div id="page-loading" style="visibility:visible; position:fixed; inset:0; background:#fff; display:flex; align-items:center; justify-content:center; z-index:9999;">
+  <img src="logo.png" alt="MOT World" style="height:56px;width:auto;opacity:0.8;">
+</div>
+<script>
+  // Safety net: never leave the page hidden for more than 3 seconds, even
+  // if content loading fails for some reason.
+  setTimeout(() => {
+    document.body.style.visibility = "visible";
+    const el = document.getElementById("page-loading");
+    if (el) el.style.display = "none";
+  }, 3000);
+</script>
 
 <section class="hero">
   <div class="hero-content">
@@ -126,7 +139,12 @@
     document.getElementById("phone-link-2").textContent = "☎ " + c.phone;
     document.getElementById("book-now-link").href = tel;
     document.getElementById("book-now-link").textContent = "Book now ☎ " + c.phone;
-  })();
+  })().finally(() => {
+    // Reveal the page now that real content is in place -- runs even if
+    // something above failed, so the site never stays permanently hidden.
+    document.body.style.visibility = "visible";
+    document.getElementById("page-loading").style.display = "none";
+  });
 </script>
 </body>
 </html>
