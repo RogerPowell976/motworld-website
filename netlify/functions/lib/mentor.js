@@ -53,4 +53,11 @@ async function getDays(location, priceId) {
   if (r.status !== 200) throw new Error('Mentor booking days failed (' + r.status + ')');
   if (Array.isArray(r.data)) {
     const out = {};
-    r.data.forEach((d) => { out[d] =
+    r.data.forEach((d) => { out[d] = []; });
+    return { slots: false, days: out };
+  }
+  if (r.data && typeof r.data === 'object' && !r.data.error) return { slots: true, days: r.data };
+  throw new Error('Mentor booking days error: ' + (r.data && r.data.error));
+}
+
+module.exports = { mentor, isConfigured, getMotPrice, getDays };
