@@ -6,13 +6,17 @@
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
+// Uses the newer MENTOR_API_* settings first, then falls back to the older names.
+function mentorUsername() { return (process.env.MENTOR_API_USERNAME || process.env.MENTOR_USERNAME || '').trim(); }
+function mentorPassword() { return (process.env.MENTOR_API_PASSWORD || process.env.MENTOR_PASSWORD || '').trim(); }
+
 async function callMentor(path, params) {
-  const base = (process.env.MENTOR_BASE_URL || '').replace(/\/+$/, '');
+  const base = (process.env.MENTOR_BASE_URL || '').trim().replace(/\/+$/, '');
   const url = base + path + (params ? '?' + new URLSearchParams(params).toString() : '');
   const res = await fetch(url, {
     headers: {
-      username: process.env.MENTOR_USERNAME || '',
-      password: process.env.MENTOR_PASSWORD || '',
+      username: mentorUsername(),
+      password: mentorPassword(),
       Accept: 'application/json',
     },
   });
@@ -23,7 +27,10 @@ async function callMentor(path, params) {
 }
 
 exports.handler = async (event) => {
-  const missing = ['MENTOR_BASE_URL', 'MENTOR_USERNAME', 'MENTOR_PASSWORD'].filter((k) => !process.env[k]);
+  const missing = [];
+  if (!process.env.MENTOR_BASE_URL) missing.push('MENTOR_BASE_URL');
+  if (!mentorUsername()) missing.push('MENTOR_API_USERNAME');
+  if (!mentorPassword()) missing.push('MENTOR_API_PASSWORD');
   if (missing.length) {
     return {
       statusCode: 200,
@@ -32,7 +39,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const out = { ok: true, baseUrl: process.env.MENTOR_BASE_URL };
+  const out = { ok: true, baseUrl: process.env.MENTOR_BASE_URL, usingNewSettings: !!(process.env.MENTOR_API_USERNAME && process.env.MENTOR_API_PASSWORD) };
 
   try {
     // Sample vehicle, only used to ask Mentor for prices. Nothing is booked.
@@ -44,7 +51,7 @@ exports.handler = async (event) => {
 
     if (prices.status === 403) {
       out.ok = false;
-      out.problem = 'Mentor refused the username/password (403). Check MENTOR_USERNAME and MENTOR_PASSWORD.';
+      out.problem = 'Mentor refused the username/password (403). Check MENTOR_API_USERNAME and MENTOR_API_PASSWORD.';
       return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(out, null, 2) };
     }
     if (!Array.isArray(prices.body)) {
