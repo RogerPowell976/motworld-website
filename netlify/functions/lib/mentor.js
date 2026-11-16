@@ -1,40 +1,56 @@
-Book Your MOT
-Choose a day and time, tell us about your car, and you're booked in.
+// Shared helper for talking to the Mentor DMS API. Always runs on the server
+// (Netlify Functions), never in the customer's browser, so the login is safe.
+//
+// Settings (Netlify > Environment variables):
+//   MENTOR_BASE_URL       e.g. https://api-qa.mentordms.co.uk/v1/   (test)
+//   MENTOR_API_USERNAME   API username
+//   MENTOR_API_PASSWORD   API password
+//   MENTOR_LOCATION       optional; defaults to the location Mentor returns
 
-Choose a date 
-dd/mm/yyyy
-Loading available days…
-Vehicle registration 
-e.g. AB12 CDE
-Year first registered 
-e.g. 2018
-Make 
-e.g. Ford
-Model 
-e.g. Fiesta
-Fuel 
-Choose…
-Gearbox 
-Choose…
-Approximate mileage 
-e.g. 45000
-First name 
-Last name 
-Mobile phone number 
-Email 
-Anything we should know? (optional) 
-e.g. known fault, dashboard warning light...
+function username() { return (process.env.MENTOR_API_USERNAME || process.env.MENTOR_USERNAME || '').trim(); }
+function password() { return (process.env.MENTOR_API_PASSWORD || process.env.MENTOR_PASSWORD || '').trim(); }
 
-How may we contact you about your booking and future offers? (optional)
-Email
-Text message
-Phone
-Post
-We'll always contact you about this booking. These tick boxes are only for other messages, such as reminders and offers.
-Please bring your registration document to qualify for the special offer price.
-✓
-You're booked in
-Thanks — your MOT is in our diary. If anything looks wrong, please call us on 01420 384293.
+function isConfigured() {
+  return !!(process.env.MENTOR_BASE_URL && username() && password());
+}
 
-Back to home
-Bordon, Hampshire • 01420 384293
+async function mentor(path, opts) {
+  const { method = 'GET', params, body } = opts || {};
+  const base = (process.env.MENTOR_BASE_URL || '').trim().replace(/\/+$/, '');
+  const url = base + path + (params ? '?' + new URLSearchParams(params).toString() : '');
+  const headers = { username: username(), password: password(), Accept: 'application/json' };
+  if (body) headers['Content-Type'] = 'application/json';
+  const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch (e) { data = { error: 'Unreadable reply from Mentor' }; }
+  return { status: res.status, data };
+}
+
+// Mentor's price step needs a vehicle, but the MOT price does not depend on it,
+// so a fixed sample vehicle is used purely to ask for the current MOT price.
+async function getMotPrice() {
+  const r = await mentor('/service/service-prices', {
+    params: { make: 'Ford', model: 'Fiesta', fuel: 'Petrol', transmission: 'Manual', regDate: '2018-03-01', mileage: '45000' },
+  });
+  if (r.status !== 200 || !Array.isArray(r.data)) {
+    throw new Error('Mentor price step failed (' + r.status + ')');
+  }
+  const item = r.data.find((p) => String(p.type).toUpperCase() === 'MOT');
+  if (!item || !item.options || !item.options.length) throw new Error('No MOT price found in Mentor');
+  const opt = item.options.find((o) => o.matched) || item.options[0];
+  const rrp = parseFloat(opt.rrp);
+  const dealer = opt.dealer_price !== undefined && opt.dealer_price !== null ? parseFloat(opt.dealer_price) : NaN;
+  const price = !isNaN(dealer) && dealer > 0 ? dealer : rrp;
+  const location = (process.env.MENTOR_LOCATION || '').trim() || (item.locations && item.locations[0]);
+  if (!location) throw new Error('No location found in Mentor');
+  return { id: String(item.service_price_id), location, rrp, price };
+}
+
+// Returns { 'YYYY-MM-DD': ['08:45', ...] } (slots on) or { 'YYYY-MM-DD': [] } (slots off).
+async function getDays(location, priceId) {
+  const r = await mentor('/service/booking-days', { params: { location, priceIds: priceId } });
+  if (r.status !== 200) throw new Error('Mentor booking days failed (' + r.status + ')');
+  if (Array.isArray(r.data)) {
+    const out = {};
+    r.data.forEach((d) => { out[d] =
