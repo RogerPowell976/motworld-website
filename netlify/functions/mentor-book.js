@@ -163,7 +163,8 @@ exports.handler = async (event) => {
         model: v.model,
         reg,
         reg_date: v.regDate || '2000-01-01',
-        current_mileage: v.mileage === null ? 0 : v.mileage,
+        // Mentor refuses 0 as "No mileage specified", so 1 stands in for unknown (see the note).
+        current_mileage: v.mileage ? v.mileage : 1,
         fuel: v.fuel,
         transmission: UNKNOWN,
       },
