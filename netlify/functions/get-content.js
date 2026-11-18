@@ -3,6 +3,15 @@
 // Public/no login needed -- this is just the published page content.
 const { getStore } = require('@netlify/blobs');
 
+// Lets the admin page kept on the office server read this. It is opened as a
+// file, so the browser reports its origin as "null".
+const CORS = { 'Access-Control-Allow-Origin': 'null', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
+const withCors = (fn) => async (event, context) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  const res = await fn(event, context);
+  return { ...res, headers: { ...CORS, ...(res.headers || {}) } };
+};
+
 function contentStore() {
   if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
     return getStore({ name: 'site-content', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
@@ -10,7 +19,7 @@ function contentStore() {
   return getStore('site-content');
 }
 
-exports.handler = async () => {
+exports.handler = withCors(async () => {
   try {
     const content = await contentStore().get('content', { type: 'json' });
     return {
@@ -24,4 +33,4 @@ exports.handler = async () => {
     // built-in defaults, rather than the page breaking entirely.
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: '{}' };
   }
-};
+});
