@@ -4,6 +4,15 @@
 const { getStore } = require('@netlify/blobs');
 const { verifySession } = require('./check-pin');
 
+// Lets the admin page kept on the office server talk to this function. It is
+// opened as a file, so the browser reports its origin as "null".
+const CORS = { 'Access-Control-Allow-Origin': 'null', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
+const withCors = (fn) => async (event, context) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  const res = await fn(event, context);
+  return { ...res, headers: { ...CORS, ...(res.headers || {}) } };
+};
+
 function contentStore() {
   if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
     return getStore({ name: 'site-content', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
@@ -17,7 +26,7 @@ function getToken(event) {
   return null;
 }
 
-exports.handler = async (event) => {
+exports.handler = withCors(async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
@@ -46,4 +55,4 @@ exports.handler = async (event) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ success: true }),
   };
-};
+});
