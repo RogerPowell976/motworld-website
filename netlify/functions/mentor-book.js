@@ -1,5 +1,5 @@
 // Public: creates an MOT booking in Mentor's service diary.
-// The customer gives only the date and time, registration and email.
+// The customer gives only the date and time, registration, mobile and email.
 // Make, model, fuel, first registration date and last MOT mileage are looked
 // up from the registration on the server; anything not found is sent as "Unknown".
 //
@@ -111,6 +111,8 @@ exports.handler = async (event) => {
   if (b.website) return reply(200, { ok: true });
 
   const email = clean(b.email, 120);
+  let phone = clean(b.phone, 25).replace(/[^0-9]/g, '');
+  if (/^447\d{9}$/.test(phone)) phone = '0' + phone.slice(2);
   const regTyped = clean(b.reg, 12).toUpperCase();
   const reg = regTyped.replace(/[^A-Z0-9]/g, '');
   const date = clean(b.date, 10);
@@ -118,6 +120,7 @@ exports.handler = async (event) => {
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply(400, { error: 'Please enter a valid email address.' });
   if (!/^[A-Z0-9]{2,8}$/.test(reg)) return reply(400, { error: 'Please enter the vehicle registration.' });
+  if (!/^07\d{9}$/.test(phone)) return reply(400, { error: 'Please enter a UK mobile number, e.g. 07700 900123.' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(\d{2}:\d{2})?$/.test(time)) return reply(400, { error: 'Please choose a date and time.' });
 
   try {
@@ -132,9 +135,9 @@ exports.handler = async (event) => {
 
     const v = await lookupVehicle(reg);
 
-    const noteParts = ['Booked online at motworld.co.uk with registration and email only'];
+    const noteParts = ['Booked online at motworld.co.uk with registration, mobile and email only'];
     noteParts.push('Vehicle details from ' + (v.source === 'none' ? 'nowhere (no lookup available)' : v.source));
-    noteParts.push('Customer name and phone not asked for');
+    noteParts.push('Customer name not asked for');
     if (!v.regDate) noteParts.push('Registration date unknown');
     if (v.mileage === null) noteParts.push('Mileage unknown');
     noteParts.push('Gearbox unknown');
@@ -151,7 +154,7 @@ exports.handler = async (event) => {
       customer: {
         first_name: 'Online',
         last_name: 'Customer',
-        phone: '00000000000',
+        phone,
         email,
         contact_preferences: { email: false, sms: false, phone: false, letter: false },
       },
