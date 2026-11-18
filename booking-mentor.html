@@ -13,9 +13,6 @@
 .chip { border:1px solid var(--border); background:#fff; border-radius:999px; padding:8px 14px; font-size:14px; cursor:pointer; }
 .chip:hover { border-color:var(--red); }
 .chip.selected { background:var(--red); color:#fff; border-color:var(--red); }
-.check-row { display:flex; gap:10px; align-items:flex-start; margin:6px 0; font-size:14px; font-weight:400; }
-.check-row input { width:auto; margin-top:3px; }
-input[type="number"] { width:100%; padding:13px 14px; border:1px solid var(--border); border-radius:10px; font-size:15px; font-family:inherit; background:#fff; color:var(--text-dark); }
 .hp { position:absolute; left:-9999px; height:0; overflow:hidden; }
 </style>
 </head>
@@ -34,7 +31,7 @@ input[type="number"] { width:100%; padding:13px 14px; border:1px solid var(--bor
 <section class="hero compact">
 <div class="hero-content">
 <h1 style="color:var(--text-dark);">Book Your MOT</h1>
-<p>Choose a day and time, tell us about your car, and you're booked in.</p>
+<p>Choose a day and time, enter your registration and email, and you're booked in.</p>
 </div>
 </section>
 
@@ -58,90 +55,15 @@ input[type="number"] { width:100%; padding:13px 14px; border:1px solid var(--bor
 <div class="slot-grid" id="slot-grid"></div>
 </div>
 
-<div class="form-row form-grid">
-<div>
+<div class="form-row">
 <label for="reg">Vehicle registration</label>
 <input type="text" id="reg" placeholder="e.g. AB12 CDE" style="text-transform:uppercase;" autocomplete="off">
-<div class="hint" id="lookup-status"></div>
-</div>
-<div>
-<label for="regYear">Year first registered</label>
-<input type="number" id="regYear" placeholder="e.g. 2018" min="1950" max="2100">
-</div>
-</div>
-
-<div class="form-row form-grid">
-<div>
-<label for="make">Make</label>
-<input type="text" id="make" placeholder="e.g. Ford">
-</div>
-<div>
-<label for="model">Model</label>
-<input type="text" id="model" placeholder="e.g. Fiesta">
-</div>
-</div>
-
-<div class="form-row form-grid">
-<div>
-<label for="fuel">Fuel</label>
-<select id="fuel">
-<option value="">Choose…</option>
-<option>Petrol</option>
-<option>Diesel</option>
-<option>Hybrid</option>
-<option>Electric</option>
-<option>Other</option>
-</select>
-</div>
-<div>
-<label for="transmission">Gearbox</label>
-<select id="transmission">
-<option value="">Choose…</option>
-<option>Manual</option>
-<option>Automatic</option>
-</select>
-</div>
 </div>
 
 <div class="form-row">
-<label for="mileage">Approximate mileage</label>
-<input type="number" id="mileage" placeholder="e.g. 45000" min="0" max="999999" inputmode="numeric">
-</div>
-
-<div class="form-row form-grid">
-<div>
-<label for="firstName">First name</label>
-<input type="text" id="firstName" autocomplete="given-name">
-</div>
-<div>
-<label for="lastName">Last name</label>
-<input type="text" id="lastName" autocomplete="family-name">
-</div>
-</div>
-
-<div class="form-row form-grid">
-<div>
-<label for="phone">Mobile phone number</label>
-<input type="tel" id="phone" autocomplete="tel">
-</div>
-<div>
 <label for="email">Email</label>
 <input type="email" id="email" autocomplete="email">
-</div>
-</div>
-
-<div class="form-row">
-<label for="notes">Anything we should know? <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-<textarea id="notes" placeholder="e.g. known fault, dashboard warning light..."></textarea>
-</div>
-
-<div class="form-row">
-<label>How may we contact you about your booking and future offers? <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-<label class="check-row"><input type="checkbox" id="c-email"> Email</label>
-<label class="check-row"><input type="checkbox" id="c-sms"> Text message</label>
-<label class="check-row"><input type="checkbox" id="c-phone"> Phone</label>
-<label class="check-row"><input type="checkbox" id="c-letter"> Post</label>
-<div class="hint">We'll always contact you about this booking. These tick boxes are only for other messages, such as reminders and offers.</div>
+<div class="hint">We'll only use this to contact you about this booking.</div>
 </div>
 
 <div class="hp"><label>Leave this empty <input type="text" id="website" tabindex="-1" autocomplete="off"></label></div>
@@ -174,8 +96,6 @@ input[type="number"] { width:100%; padding:13px 14px; border:1px solid var(--bor
 let days = {};          // { 'YYYY-MM-DD': ['08:45', ...] } from Mentor
 let usesSlots = true;
 let selectedTime = null;
-let price = null;
-let lookupTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -194,6 +114,7 @@ function shortDate(iso) {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 function money(n) { return "£" + Number(n).toFixed(2); }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 function updateSubmit() {
   const btn = $("submit-btn");
@@ -251,7 +172,6 @@ async function loadAvailability() {
     if (!res.ok) throw new Error(data.error || "unavailable");
     days = data.days || {};
     usesSlots = !!data.slots;
-    price = data.price;
     const dates = Object.keys(days).sort();
     if (!dates.length) { hint.textContent = "No days are open for booking right now. Please call us on 01420 384293."; return; }
     const d = $("date");
@@ -282,48 +202,22 @@ $("date").addEventListener("click", function () {
   if (this.showPicker) { try { this.showPicker(); } catch (e) {} }
 });
 
-// Auto-fill the make from the registration where the DVLA lookup is switched on.
-$("reg").addEventListener("input", function () {
-  clearTimeout(lookupTimer);
-  const reg = this.value.trim();
-  const status = $("lookup-status");
-  if (reg.length < 6) { status.textContent = ""; return; }
-  lookupTimer = setTimeout(async () => {
-    try {
-      const res = await fetch("/.netlify/functions/lookup-vehicle", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ registrationNumber: reg }),
-      });
-      const data = await res.json();
-      if (data.found && data.make) {
-        if (!$("make").value) $("make").value = data.make;
-        status.textContent = "Found: " + data.make + (data.colour ? ", " + data.colour : "");
-      } else { status.textContent = ""; }
-    } catch (e) { status.textContent = ""; }
-  }, 500);
-});
-
 $("booking-form").addEventListener("submit", async function (e) {
   e.preventDefault();
   if (selectedTime === null) return;
   const err = $("form-error");
   err.style.display = "none";
+
+  const reg = $("reg").value.trim();
+  const email = $("email").value.trim();
+  if (!/^[A-Za-z0-9 ]{2,10}$/.test(reg)) { err.textContent = "Please enter your vehicle registration."; err.style.display = "block"; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = "Please enter a valid email address."; err.style.display = "block"; return; }
+
   const btn = $("submit-btn");
   btn.disabled = true;
   btn.textContent = "Booking…";
 
-  const body = {
-    date: $("date").value,
-    time: selectedTime,
-    firstName: $("firstName").value, lastName: $("lastName").value,
-    phone: $("phone").value, email: $("email").value,
-    reg: $("reg").value, regYear: $("regYear").value,
-    make: $("make").value, model: $("model").value,
-    fuel: $("fuel").value, transmission: $("transmission").value,
-    mileage: $("mileage").value, notes: $("notes").value,
-    website: $("website").value,
-    contact: { email: $("c-email").checked, sms: $("c-sms").checked, phone: $("c-phone").checked, letter: $("c-letter").checked },
-  };
+  const body = { date: $("date").value, time: selectedTime, reg, email, website: $("website").value };
 
   try {
     const res = await fetch("/.netlify/functions/mentor-book", {
@@ -331,17 +225,19 @@ $("booking-form").addEventListener("submit", async function (e) {
     });
     const data = await res.json();
     if (!res.ok) {
-      err.textContent = data.error || "Something went wrong. Please try again or call us.";
+      err.textContent = (data.error || "Something went wrong. Please try again or call us.") + (data.detail ? " (Mentor said: " + data.detail + ")" : "");
       err.style.display = "block";
       if (res.status === 409) { await loadAvailability(); renderTimes(); }
       else { updateSubmit(); }
       return;
     }
+    const v = data.vehicle || {};
+    const vehicleText = [v.make, v.model].filter((x) => x && x !== "Unknown").join(" ");
     $("confirm-detail").innerHTML =
-      "<strong>Date:</strong> " + longDate(body.date) + (usesSlots ? " at " + body.time : "") + "<br>" +
-      "<strong>Vehicle:</strong> " + body.reg.toUpperCase() + " — " + body.make + " " + body.model + "<br>" +
+      "<strong>Date:</strong> " + longDate(body.date) + (usesSlots ? " at " + esc(body.time) : "") + "<br>" +
+      "<strong>Vehicle:</strong> " + esc(reg.toUpperCase()) + (vehicleText ? " — " + esc(vehicleText) : "") + "<br>" +
       (data.price ? "<strong>MOT price:</strong> " + money(data.price) + "<br>" : "") +
-      (data.jobNumber ? "<strong>Reference:</strong> " + data.jobNumber + "<br>" : "");
+      (data.jobNumber ? "<strong>Reference:</strong> " + esc(data.jobNumber) + "<br>" : "");
     $("booking-form").style.display = "none";
     $("price-banner").style.display = "none";
     $("confirm-panel").classList.add("show");
