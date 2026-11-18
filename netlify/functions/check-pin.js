@@ -5,6 +5,15 @@
 const { getStore } = require('@netlify/blobs');
 const crypto = require('crypto');
 
+// Lets the admin page kept on the office server talk to this function. It is
+// opened as a file, so the browser reports its origin as "null".
+const CORS = { 'Access-Control-Allow-Origin': 'null', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
+const withCors = (fn) => async (event, context) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  const res = await fn(event, context);
+  return { ...res, headers: { ...CORS, ...(res.headers || {}) } };
+};
+
 function lockoutStore() {
   if (process.env.BLOBS_SITE_ID && process.env.BLOBS_TOKEN) {
     return getStore({ name: 'admin-lockout', siteID: process.env.BLOBS_SITE_ID, token: process.env.BLOBS_TOKEN });
@@ -27,7 +36,7 @@ function getClientId(event) {
   return event.headers['x-nf-client-connection-ip'] || event.headers['client-ip'] || 'unknown';
 }
 
-exports.handler = async (event) => {
+exports.handler = withCors(async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
@@ -96,7 +105,7 @@ exports.handler = async (event) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, expiresAt: now + SESSION_MS }),
   };
-};
+});
 
 // Shared helper other admin functions can use to verify a session token.
 // (Node will only export this when required directly, e.g. from list-bookings.js.)
