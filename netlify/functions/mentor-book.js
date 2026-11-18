@@ -1,11 +1,104 @@
 // Public: creates an MOT booking in Mentor's service diary.
-// The price and location are always looked up on the server from Mentor,
-// never taken from the customer's browser.
+// The customer gives only the date and time, registration and email.
+// Make, model, fuel, first registration date and last MOT mileage are looked
+// up from the registration on the server; anything not found is sent as "Unknown".
+//
+// Vehicle lookup settings (Netlify > Environment variables), all optional:
+//   DVSA MOT history (best: gives make AND model):
+//     DVSA_CLIENT_ID, DVSA_CLIENT_SECRET, DVSA_API_KEY, DVSA_TOKEN_URL
+//   DVLA vehicle enquiry (fallback: make, fuel and year, no model):
+//     DVLA_API_KEY
 const { mentor, isConfigured, getMotPrice, getDays } = require('./lib/mentor');
 
 const JSON_H = { 'Content-Type': 'application/json' };
 const reply = (statusCode, obj) => ({ statusCode, headers: JSON_H, body: JSON.stringify(obj) });
 const clean = (v, max) => String(v === undefined || v === null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
+const isTestSystem = () => /qa|demo|test/i.test(process.env.MENTOR_BASE_URL || '');
+
+const UNKNOWN = 'Unknown';
+const titleCase = (s) => String(s || '').toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).trim();
+
+function mapFuel(f) {
+  const s = String(f || '').toLowerCase();
+  if (!s) return UNKNOWN;
+  if (s.includes('hybrid')) return 'Hybrid';
+  if (s.includes('electric')) return 'Electric';
+  if (s.includes('diesel')) return 'Diesel';
+  if (s.includes('petrol')) return 'Petrol';
+  return 'Other';
+}
+
+// DVSA MOT history API: make, model, fuel, first used date, last MOT mileage.
+async function lookupDvsa(reg) {
+  const { DVSA_CLIENT_ID, DVSA_CLIENT_SECRET, DVSA_API_KEY, DVSA_TOKEN_URL } = process.env;
+  if (!DVSA_CLIENT_ID || !DVSA_CLIENT_SECRET || !DVSA_API_KEY || !DVSA_TOKEN_URL) return null;
+  const tok = await fetch(DVSA_TOKEN_URL.trim(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: DVSA_CLIENT_ID.trim(),
+      client_secret: DVSA_CLIENT_SECRET.trim(),
+      scope: 'https://tapi.dvsa.gov.uk/.default',
+    }).toString(),
+  });
+  if (!tok.ok) throw new Error('DVSA sign-in failed (' + tok.status + ')');
+  const { access_token } = await tok.json();
+  const res = await fetch('https://history.mot.api.gov.uk/v1/trade/vehicles/registration/' + encodeURIComponent(reg), {
+    headers: { Authorization: 'Bearer ' + access_token, 'X-API-Key': DVSA_API_KEY.trim(), Accept: 'application/json' },
+  });
+  if (!res.ok) return null;
+  const v = await res.json();
+  const tests = Array.isArray(v.motTests) ? v.motTests : [];
+  const withMiles = tests.find((t) => t.odometerValue && String(t.odometerResultType || 'READ').toUpperCase() === 'READ');
+  let mileage = null;
+  if (withMiles) {
+    mileage = parseInt(withMiles.odometerValue, 10);
+    if (String(withMiles.odometerUnit || '').toUpperCase() === 'KM') mileage = Math.round(mileage * 0.621371);
+  }
+  return {
+    make: titleCase(v.make) || UNKNOWN,
+    model: titleCase(v.model) || UNKNOWN,
+    fuel: mapFuel(v.fuelType),
+    regDate: v.firstUsedDate || v.registrationDate || null,
+    mileage,
+    source: 'DVSA',
+  };
+}
+
+// DVLA vehicle enquiry: make, fuel and year only (no model).
+async function lookupDvla(reg) {
+  const key = process.env.DVLA_API_KEY;
+  if (!key) return null;
+  const res = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': key.trim() },
+    body: JSON.stringify({ registrationNumber: reg }),
+  });
+  if (!res.ok) return null;
+  const v = await res.json();
+  return {
+    make: titleCase(v.make) || UNKNOWN,
+    model: UNKNOWN,
+    fuel: mapFuel(v.fuelType),
+    regDate: v.monthOfFirstRegistration ? v.monthOfFirstRegistration + '-01'
+      : (v.yearOfManufacture ? v.yearOfManufacture + '-01-01' : null),
+    mileage: null,
+    source: 'DVLA',
+  };
+}
+
+async function lookupVehicle(reg) {
+  for (const fn of [lookupDvsa, lookupDvla]) {
+    try {
+      const v = await fn(reg);
+      if (v) return v;
+    } catch (e) {
+      console.error('mentor-book: vehicle lookup:', e.message);
+    }
+  }
+  return { make: UNKNOWN, model: UNKNOWN, fuel: UNKNOWN, regDate: null, mileage: null, source: 'none' };
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Method not allowed' });
@@ -17,32 +110,15 @@ exports.handler = async (event) => {
   // Honeypot: real customers never fill this in.
   if (b.website) return reply(200, { ok: true });
 
-  const firstName = clean(b.firstName, 60);
-  const lastName = clean(b.lastName, 60);
-  const phone = clean(b.phone, 25);
   const email = clean(b.email, 120);
-  const reg = clean(b.reg, 12).toUpperCase();
-  const make = clean(b.make, 40);
-  const model = clean(b.model, 60);
-  const fuel = clean(b.fuel, 20);
-  const transmission = clean(b.transmission, 20);
-  const regYear = parseInt(b.regYear, 10);
-  const mileage = parseInt(b.mileage, 10);
-  const notes = clean(b.notes, 500);
+  const regTyped = clean(b.reg, 12).toUpperCase();
+  const reg = regTyped.replace(/[^A-Z0-9]/g, '');
   const date = clean(b.date, 10);
   const time = clean(b.time, 5);
-  const c = b.contact || {};
 
-  if (!firstName || !lastName) return reply(400, { error: 'Please enter your first and last name.' });
-  if (!/^[0-9 +()-]{7,25}$/.test(phone)) return reply(400, { error: 'Please enter a valid phone number.' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply(400, { error: 'Please enter a valid email address.' });
-  if (!/^[A-Z0-9 ]{2,10}$/.test(reg)) return reply(400, { error: 'Please enter the vehicle registration.' });
-  if (!make || !model) return reply(400, { error: 'Please enter the make and model.' });
-  if (!fuel || !transmission) return reply(400, { error: 'Please choose the fuel and transmission.' });
-  const thisYear = new Date().getFullYear();
-  if (!(regYear >= 1950 && regYear <= thisYear + 1)) return reply(400, { error: 'Please enter the year the car was first registered.' });
-  if (!(mileage >= 0 && mileage <= 999999)) return reply(400, { error: 'Please enter the approximate mileage.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return reply(400, { error: 'Please choose a date and time.' });
+  if (!/^[A-Z0-9]{2,8}$/.test(reg)) return reply(400, { error: 'Please enter the vehicle registration.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(\d{2}:\d{2})?$/.test(time)) return reply(400, { error: 'Please choose a date and time.' });
 
   try {
     const p = await getMotPrice();
@@ -54,9 +130,14 @@ exports.handler = async (event) => {
       return reply(409, { error: 'Sorry, that time has just been taken. Please choose another.' });
     }
 
-    const noteParts = ['Booked online at motworld.co.uk'];
-    noteParts.push('Registration year given by customer: ' + regYear);
-    if (notes) noteParts.push('Customer notes: ' + notes);
+    const v = await lookupVehicle(reg);
+
+    const noteParts = ['Booked online at motworld.co.uk with registration and email only'];
+    noteParts.push('Vehicle details from ' + (v.source === 'none' ? 'nowhere (no lookup available)' : v.source));
+    noteParts.push('Customer name and phone not asked for');
+    if (!v.regDate) noteParts.push('Registration date unknown');
+    if (v.mileage === null) noteParts.push('Mileage unknown');
+    noteParts.push('Gearbox unknown');
 
     const payload = {
       location: p.location,
@@ -66,35 +147,40 @@ exports.handler = async (event) => {
       isMotability: false,
       booking_date: d.slots ? date + ' ' + time : date,
       totalQuotedPrice: p.price.toFixed(2),
-      Notes: noteParts.join('. '),
+      Notes: noteParts.join('. ') + '.',
       customer: {
-        first_name: firstName,
-        last_name: lastName,
-        phone,
+        first_name: 'Online',
+        last_name: 'Customer',
+        phone: '00000000000',
         email,
-        contact_preferences: { email: !!c.email, sms: !!c.sms, phone: !!c.phone, letter: !!c.letter },
+        contact_preferences: { email: false, sms: false, phone: false, letter: false },
       },
       vehicle: {
-        make, model, reg,
-        reg_date: regYear + '-01-01',
-        current_mileage: mileage,
-        fuel, transmission,
+        make: v.make,
+        model: v.model,
+        reg,
+        reg_date: v.regDate || '2000-01-01',
+        current_mileage: v.mileage === null ? 0 : v.mileage,
+        fuel: v.fuel,
+        transmission: UNKNOWN,
       },
       items: [{ service_price_id: p.id }],
     };
 
     const r = await mentor('/service/create-booking', { method: 'POST', body: payload });
     if (r.status === 200 && r.data && r.data.result) {
-      return reply(200, { ok: true, jobNumber: r.data.jobNumber, price: p.price });
+      return reply(200, { ok: true, jobNumber: r.data.jobNumber, price: p.price, vehicle: { make: v.make, model: v.model } });
     }
 
     const err = String((r.data && r.data.error) || '');
     console.error('mentor-book: Mentor refused (' + r.status + '):', err);
-    if (/not available/i.test(err)) return reply(409, { error: 'Sorry, that time is no longer available. Please choose another.' });
-    if (/disabled/i.test(err)) return reply(503, { error: 'Online booking is temporarily unavailable. Please call us on 01420 384293.' });
-    return reply(502, { error: 'We could not complete your booking online. Please call us on 01420 384293.' });
+    // On Mentor's test system, pass Mentor's own message back so it shows on the page.
+    const detail = isTestSystem() ? (err || JSON.stringify(r.data)).slice(0, 300) : undefined;
+    if (/not available/i.test(err)) return reply(409, { error: 'Sorry, that time is no longer available. Please choose another.', detail });
+    if (/disabled/i.test(err)) return reply(503, { error: 'Online booking is temporarily unavailable. Please call us on 01420 384293.', detail });
+    return reply(502, { error: 'We could not complete your booking online. Please call us on 01420 384293.', detail });
   } catch (e) {
     console.error('mentor-book:', e.message);
-    return reply(502, { error: 'We could not reach the booking system. Please call us on 01420 384293.' });
+    return reply(502, { error: 'We could not reach the booking system. Please call us on 01420 384293.', detail: isTestSystem() ? e.message : undefined });
   }
 };
