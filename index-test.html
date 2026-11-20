@@ -8,7 +8,8 @@
 <link rel="stylesheet" href="style.css">
 <style>
 /* TEST PAGE: "Today's MOT Price Offer" card first, with Click and Book Now as the main action */
-.offer-card.primary .offer-label { font-size: 17px; letter-spacing: 0.5px; }
+.offer-today { max-width: 520px; margin: 0 auto; }
+.section-title-second { margin-top: 48px; }
 .offer-book-ahead { font-size: 16px; font-weight: 700; line-height: 1.4; margin: 6px 0 22px; }
 .btn-book-now {
   display: block;
@@ -62,10 +63,9 @@
 </section>
 
 <section class="offers">
-  <h2 class="section-title">This Month's Offers</h2>
-  <div class="offers-grid">
+  <h2 class="section-title">Today's MOT Price Offer</h2>
+  <div class="offer-today">
     <div class="offer-card primary">
-      <div class="offer-label">TODAY'S MOT PRICE OFFER</div>
       <div class="offer-price" id="offer-price">£39.95</div>
       <div class="offer-rrp">RRP <span id="offer-rrp">£54.85</span></div>
       <div class="offer-book-ahead">You can book at LMC 30 days before your MOT is due</div>
@@ -73,6 +73,9 @@
       <div class="offer-call">or call <a href="tel:01420384293" id="phone-link-0">01420 384293</a></div>
       <div class="offer-detail" id="offer-detail">Covers Class 4 MOTs. Bring registration document to qualify for this offer.</div>
     </div>
+  </div>
+  <h2 class="section-title section-title-second">This Month's Offers</h2>
+  <div class="offers-grid">
     <div class="offer-card">
       <div class="offer-label">MOT AND SERVICE</div>
       <div class="offer-title" id="second-offer-title">MOT and Service from £189</div>
