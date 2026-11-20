@@ -14,6 +14,8 @@
 .chip:hover { border-color:var(--red); }
 .chip.selected { background:var(--red); color:#fff; border-color:var(--red); }
 .hp { position:absolute; left:-9999px; height:0; overflow:hidden; }
+.vehicle-found { font-size:14px; margin-top:6px; min-height:1.2em; color:var(--text-muted); }
+.vehicle-found.ok { color:#1a7f37; font-weight:600; }
 </style>
 </head>
 <body>
@@ -58,6 +60,7 @@
 <div class="form-row">
 <label for="reg">Vehicle registration</label>
 <input type="text" id="reg" placeholder="e.g. AB12 CDE" style="text-transform:uppercase;" autocomplete="off">
+<div class="vehicle-found" id="vehicle-found" aria-live="polite"></div>
 </div>
 
 <div class="form-row">
@@ -201,6 +204,45 @@ async function loadAvailability() {
   $("footer-phone").textContent = content.phone;
   loadAvailability();
 })();
+
+// Live vehicle check: shows e.g. "✓ Citroen C-Crosser · Diesel · Blue · 2010" under the registration.
+// Only a helper for the customer; the booking still works if the lookup finds nothing.
+let lookupTimer = null;
+let lastLookedUp = "";
+async function lookupReg() {
+  const box = $("vehicle-found");
+  const reg = $("reg").value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (reg === lastLookedUp) return;
+  lastLookedUp = reg;
+  box.className = "vehicle-found";
+  if (reg.length < 2) { box.textContent = ""; return; }
+  box.textContent = "Checking registration…";
+  try {
+    const res = await fetch("/.netlify/functions/lookup-vehicle", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrationNumber: reg }),
+    });
+    const v = await res.json();
+    if (reg !== lastLookedUp) return; // the customer has typed something newer
+    if (v.found) {
+      const parts = [[v.make, v.model].filter(Boolean).join(" "), v.fuelType, v.colour, v.yearOfManufacture].filter(Boolean);
+      box.className = "vehicle-found ok";
+      box.textContent = "✓ " + parts.join(" · ");
+    } else if (v.reason === "not_found") {
+      box.textContent = "We couldn't find that registration. Please check it. You can still book.";
+    } else {
+      box.textContent = "";
+    }
+  } catch (e) {
+    if (reg === lastLookedUp) box.textContent = "";
+  }
+}
+$("reg").addEventListener("input", () => {
+  clearTimeout(lookupTimer);
+  const len = $("reg").value.replace(/[^A-Za-z0-9]/g, "").length;
+  if (len === 0) { lastLookedUp = ""; $("vehicle-found").textContent = ""; return; }
+  if (len >= 4) lookupTimer = setTimeout(lookupReg, 800);
+});
+$("reg").addEventListener("blur", () => { clearTimeout(lookupTimer); lookupReg(); });
 
 $("date").addEventListener("change", () => { chooseDate($("date").value); });
 $("date").addEventListener("click", function () {
