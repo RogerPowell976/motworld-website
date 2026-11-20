@@ -33,7 +33,7 @@
 <section class="hero compact">
 <div class="hero-content">
 <h1 style="color:var(--text-dark);">Book Your MOT</h1>
-<p>Choose a day and time, enter your registration, mobile and email, and you're booked in.</p>
+<p>Choose a day and time, enter your registration, mobile and email, pay by card, and you're booked in.</p>
 </div>
 </section>
 
@@ -79,13 +79,18 @@
 <div id="form-error" class="hint" style="color:var(--red); display:none; margin-bottom:12px;"></div>
 
 <button type="submit" class="btn-submit" id="submit-btn" style="display:none;"></button>
-<div class="form-alt">Please bring your registration document to qualify for the special offer price.</div>
+<div class="form-alt">You'll pay on Stripe's secure card page. Your MOT is only booked once your payment has gone through.<br>Please bring your registration document to qualify for the special offer price.</div>
 </form>
+
+<div class="confirm-panel" id="paying-panel">
+<h2 id="paying-title">Confirming your payment…</h2>
+<p id="paying-text">Please wait a moment while we book you in.</p>
+</div>
 
 <div class="confirm-panel" id="confirm-panel">
 <div class="confirm-icon">✓</div>
 <h2>You're booked in</h2>
-<p>Thanks — your MOT is in our diary. If anything looks wrong, please call us on 01420 384293.</p>
+<p>Thanks — your payment has gone through and your MOT is in our diary. Stripe will email you a receipt. If anything looks wrong, please call us on 01420 384293.</p>
 <div class="confirm-detail" id="confirm-detail"></div>
 <a class="btn-secondary" href="index.html">Back to home</a>
 </div>
@@ -104,6 +109,7 @@
 let days = {};          // { 'YYYY-MM-DD': ['08:45', ...] } from Mentor
 let usesSlots = true;
 let selectedTime = null;
+let todaysPrice = "";   // Today's MOT price from the admin page, e.g. "£39.95" (this is what's charged)
 
 const $ = (id) => document.getElementById(id);
 
@@ -129,9 +135,8 @@ function updateSubmit() {
   const ready = selectedTime !== null;
   btn.style.display = ready ? "block" : "none";
   btn.disabled = !ready;
-  if (ready) btn.textContent = usesSlots
-    ? "Book " + longDate($("date").value) + " at " + selectedTime + " →"
-    : "Book " + longDate($("date").value) + " →";
+  if (ready) btn.textContent = "Pay " + todaysPrice + " and book " + longDate($("date").value)
+    + (usesSlots ? " at " + selectedTime : "") + " →";
 }
 
 function chooseDate(iso) {
@@ -188,11 +193,6 @@ async function loadAvailability() {
     hint.textContent = "Pick a date, or choose one of the next free days below.";
     $("next-days").innerHTML = dates.slice(0, 6).map((x) => '<button type="button" class="chip" data-date="' + x + '">' + shortDate(x) + "</button>").join("");
     document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => chooseDate(c.dataset.date)));
-    if (data.price) {
-      const b = $("price-banner");
-      b.style.display = "block";
-      b.innerHTML = "MOT: <strong>" + money(data.price) + "</strong>" + (data.rrp && data.rrp > data.price ? "<s>normal price " + money(data.rrp) + "</s>" : "");
-    }
   } catch (e) {
     hint.textContent = "We couldn't load available days. Please try again shortly, or call us on 01420 384293.";
   }
@@ -202,8 +202,77 @@ async function loadAvailability() {
   const content = await loadContent();
   $("footer-location").textContent = content.location;
   $("footer-phone").textContent = content.phone;
+  todaysPrice = content.primaryOfferPrice;
+  const b = $("price-banner");
+  b.style.display = "block";
+  b.innerHTML = "Today's MOT price: <strong>" + esc(content.primaryOfferPrice) + "</strong>"
+    + (content.primaryOfferRrp ? "<s>RRP " + esc(content.primaryOfferRrp) + "</s>" : "")
+    + "<br><span style=\"font-size:13px;color:var(--text-muted);\">Paid securely by card when you book.</span>";
+
+  const q = new URLSearchParams(location.search);
+  if (q.get("paid")) { confirmPayment(q.get("paid")); return; }
+  if (q.get("cancelled")) {
+    restoreForm();
+    const err = $("form-error");
+    err.textContent = "Payment cancelled, so nothing has been booked. You can try again below.";
+    err.style.display = "block";
+    history.replaceState(null, "", location.pathname);
+  }
   loadAvailability();
 })();
+
+// Keep what the customer typed, so it's still there if they come back from Stripe without paying.
+function saveForm() {
+  try { sessionStorage.setItem("mw-booking", JSON.stringify({ reg: $("reg").value, phone: $("phone").value, email: $("email").value })); } catch (e) {}
+}
+function restoreForm() {
+  try {
+    const f = JSON.parse(sessionStorage.getItem("mw-booking") || "null");
+    if (f) { $("reg").value = f.reg || ""; $("phone").value = f.phone || ""; $("email").value = f.email || ""; }
+  } catch (e) {}
+}
+
+function showConfirmation(data) {
+  const v = data.vehicle || {};
+  const vehicleText = [v.make, v.model].filter((x) => x && x !== "Unknown").join(" ");
+  $("confirm-detail").innerHTML =
+    "<strong>Date:</strong> " + longDate(data.date) + (data.time ? " at " + esc(data.time) : "") + "<br>" +
+    "<strong>Vehicle:</strong> " + esc(String(data.reg || "").toUpperCase()) + (vehicleText ? " — " + esc(vehicleText) : "") + "<br>" +
+    (data.price ? "<strong>Paid:</strong> " + money(data.price) + " by card<br>" : "") +
+    (data.jobNumber ? "<strong>Reference:</strong> " + esc(data.jobNumber) + "<br>" : "");
+  $("booking-form").style.display = "none";
+  $("price-banner").style.display = "none";
+  $("paying-panel").classList.remove("show");
+  $("confirm-panel").classList.add("show");
+}
+
+// Back from Stripe: ask the server to check the payment and make the booking.
+async function confirmPayment(sessionId) {
+  $("booking-form").style.display = "none";
+  $("price-banner").style.display = "none";
+  $("paying-panel").classList.add("show");
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const res = await fetch("/.netlify/functions/pay-confirm", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId }),
+      });
+      const data = await res.json();
+      if (res.status === 202) { await new Promise((r) => setTimeout(r, 2500)); continue; }
+      if (res.ok && data.ok) {
+        try { sessionStorage.removeItem("mw-booking"); } catch (e) {}
+        showConfirmation(data);
+        return;
+      }
+      $("paying-title").textContent = "We couldn't complete your booking";
+      $("paying-text").textContent = data.error || "Please call us on 01420 384293.";
+      return;
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  }
+  $("paying-title").textContent = "Still confirming your booking";
+  $("paying-text").textContent = "Your payment may have gone through. Please refresh this page in a minute, or call us on 01420 384293.";
+}
 
 // Live vehicle check: shows e.g. "✓ Citroen C-Crosser · Diesel · Blue · 2010" under the registration.
 // Only a helper for the customer; the booking still works if the lookup finds nothing.
@@ -265,32 +334,24 @@ $("booking-form").addEventListener("submit", async function (e) {
 
   const btn = $("submit-btn");
   btn.disabled = true;
-  btn.textContent = "Booking…";
+  btn.textContent = "Taking you to secure payment…";
 
   const body = { date: $("date").value, time: selectedTime, reg, phone, email, website: $("website").value };
 
   try {
-    const res = await fetch("/.netlify/functions/mentor-book", {
+    const res = await fetch("/.netlify/functions/pay-start", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) {
-      err.textContent = (data.error || "Something went wrong. Please try again or call us.") + (data.detail ? " (Mentor said: " + data.detail + ")" : "");
+    if (!res.ok || !data.url) {
+      err.textContent = data.error || "Something went wrong. Please try again or call us on 01420 384293.";
       err.style.display = "block";
       if (res.status === 409) { await loadAvailability(); renderTimes(); }
       else { updateSubmit(); }
       return;
     }
-    const v = data.vehicle || {};
-    const vehicleText = [v.make, v.model].filter((x) => x && x !== "Unknown").join(" ");
-    $("confirm-detail").innerHTML =
-      "<strong>Date:</strong> " + longDate(body.date) + (usesSlots ? " at " + esc(body.time) : "") + "<br>" +
-      "<strong>Vehicle:</strong> " + esc(reg.toUpperCase()) + (vehicleText ? " — " + esc(vehicleText) : "") + "<br>" +
-      (data.price ? "<strong>MOT price:</strong> " + money(data.price) + "<br>" : "") +
-      (data.jobNumber ? "<strong>Reference:</strong> " + esc(data.jobNumber) + "<br>" : "");
-    $("booking-form").style.display = "none";
-    $("price-banner").style.display = "none";
-    $("confirm-panel").classList.add("show");
+    saveForm();
+    window.location.href = data.url; // Stripe's secure payment page
   } catch (ex) {
     err.textContent = "We couldn't reach the booking system. Please try again or call us on 01420 384293.";
     err.style.display = "block";
