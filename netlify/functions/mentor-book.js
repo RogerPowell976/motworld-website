@@ -103,6 +103,9 @@ async function lookupVehicle(reg) {
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Method not allowed' });
   if (!isConfigured()) return reply(503, { error: 'Online booking is not available right now. Please call us.' });
+  // Once card payments are switched on, bookings must go through pay-start/pay-confirm,
+  // so nobody can book without paying by calling this function directly.
+  if ((process.env.STRIPE_SECRET_KEY || '').trim()) return reply(403, { error: 'Please book and pay through the booking page.' });
 
   let b;
   try { b = JSON.parse(event.body || '{}'); } catch (e) { return reply(400, { error: 'Invalid request' }); }
