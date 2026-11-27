@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MOT World — MOT Testing & Vehicle Services</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  /* Today's MOT price offer: the main card, shown on its own above the monthly offers. */
+  .todays-offer { max-width: 1200px; margin: 0 auto; padding: 44px 24px 8px; }
+  .offer-card.featured { max-width: 640px; margin: 0 auto; padding: 52px 40px; }
+  .offer-card.featured .offer-price { font-size: 84px; line-height: 1; margin-bottom: 14px; }
+  .offer-card.featured .offer-rrp { font-size: 18px; }
+  .offer-card.featured .offer-detail { font-size: 17px; margin: 18px 0 26px; }
+  .offer-card.featured .btn-secondary { font-size: 18px; padding: 16px 30px; }
+  @media (max-width: 600px) {
+    .todays-offer { padding: 32px 16px 0; }
+    .offer-card.featured { padding: 40px 22px; }
+    .offer-card.featured .offer-price { font-size: 68px; }
+  }
+</style>
 </head>
 <body style="visibility:hidden;">
 
@@ -38,6 +52,16 @@
   </div>
 </section>
 
+<section class="todays-offer">
+  <h2 class="section-title">Today's MOT Price Offer</h2>
+  <div class="offer-card primary featured">
+    <div class="offer-price" id="offer-price">£29.95</div>
+    <div class="offer-rrp">RRP <span id="offer-rrp">£54.85</span></div>
+    <div class="offer-detail" id="offer-detail">Covers Class 4 MOTs. Bring registration document to qualify for this offer.</div>
+    <a class="btn-secondary" href="tel:01420384293" id="book-now-link">Book now ☎ 01420 384293</a>
+  </div>
+</section>
+
 <section class="offers">
   <h2 class="section-title">This Month's Offers</h2>
   <div class="offers-grid">
@@ -47,13 +71,6 @@
       <div class="offer-detail" id="second-offer-detail">Complete MOT and full service in one visit</div>
       <div class="offer-detail" style="margin-top:-14px;">Phone for quote — just need your engine size</div>
       <a class="btn-secondary" href="tel:01420384293" id="phone-link-1">☎ 01420 384293</a>
-    </div>
-    <div class="offer-card primary">
-      <div class="offer-label">MOT PRICE OFFER</div>
-      <div class="offer-price" id="offer-price">£29.95</div>
-      <div class="offer-rrp">RRP <span id="offer-rrp">£54.85</span></div>
-      <div class="offer-detail" id="offer-detail">Covers Class 4 MOTs. Bring registration document to qualify for this offer.</div>
-      <a class="btn-secondary" href="tel:01420384293" id="book-now-link">Book now ☎ 01420 384293</a>
     </div>
     <div class="offer-card">
       <div class="offer-label">HEALTH CHECK</div>
