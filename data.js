@@ -1,4 +1,4 @@
-// Shared site content for MOT World. Admin edits are saved to a shared
+// Shared site content for MotWorld. Admin edits are saved to a shared
 // server-side store (via get-content.js / save-content.js) so every visitor
 // sees the same pricing and offers, not just the browser that made the edit.
 const DEFAULT_CONTENT = {
