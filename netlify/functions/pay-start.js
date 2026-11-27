@@ -46,7 +46,7 @@ exports.handler = async (event) => {
             price_data: {
               currency: 'gbp',
               unit_amount: Math.round(price * 100),
-              product_data: { name: 'MOT test – ' + details.reg + ' – ' + when, description: 'MOT World, Bordon (LMC of Farnham Ltd)' },
+              product_data: { name: 'MOT test – ' + details.reg + ' – ' + when, description: 'MotWorld, Bordon (LMC of Farnham Ltd)' },
             },
           },
         },
