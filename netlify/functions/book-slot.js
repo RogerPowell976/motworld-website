@@ -30,7 +30,7 @@ function isValidSlotTime(time) {
 // a booking should still succeed even if the email couldn't go out.
 async function sendConfirmationEmail(booking) {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.RESEND_FROM || 'MOT World <bookings@motworld.co.uk>';
+  const fromAddress = process.env.RESEND_FROM || 'MotWorld <bookings@motworld.co.uk>';
   if (!apiKey || !booking.email) return;
 
   try {
@@ -43,17 +43,17 @@ async function sendConfirmationEmail(booking) {
       body: JSON.stringify({
         from: fromAddress,
         to: booking.email,
-        subject: 'Your MOT booking request — MOT World',
+        subject: 'Your MOT booking request — MotWorld',
         html: `
           <p>Hi ${booking.name || 'there'},</p>
-          <p>Thanks for your booking request with MOT World. Here's what you sent us:</p>
+          <p>Thanks for your booking request with MotWorld. Here's what you sent us:</p>
           <ul>
             <li><strong>Date:</strong> ${booking.date}</li>
             <li><strong>Time:</strong> ${booking.time}</li>
             <li><strong>Vehicle:</strong> ${booking.reg}${booking.makeModel ? ' — ' + booking.makeModel : ''}</li>
           </ul>
           <p>We'll be in touch shortly to confirm. If anything's wrong, just reply to this email or give us a call.</p>
-          <p>MOT World</p>
+          <p>MotWorld</p>
         `,
       }),
     });
